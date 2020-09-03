@@ -32,6 +32,7 @@ namespace ClassicUO.Game.UI.Controls
 {
     internal class Combobox : Control
     {
+        private ComboboxContextMenu _contextMenu;
         private readonly byte _font;
         private readonly Label _label;
         private readonly int _maxHeight;
@@ -59,11 +60,12 @@ namespace ClassicUO.Game.UI.Controls
             {
                 X = 2, Y = 5
             });
-
             if (showArrow)
+            {
                 Add(new GumpPic(width - 18, 2, 0x00FC, 0));
+            }
         }
-
+        
         public bool IsOpen { get; set; }
 
         public int SelectedIndex
@@ -72,14 +74,21 @@ namespace ClassicUO.Game.UI.Controls
             set
             {
                 _selectedIndex = value;
-
                 if (_items != null)
                 {
+                    CleanupContextMenu();
                     _label.Text = _items[value];
-                    UIManager.GetGump<ComboboxContextMenu>()?.Dispose();
                     OnOptionSelected?.Invoke(this, value);
                 }
             }
+        }
+
+
+
+        private void CleanupContextMenu()
+        {
+            _contextMenu.OnItemSelected -= ItemSelectedHandler;
+            _contextMenu.Dispose();
         }
 
         internal string GetSelectedItem => _label.Text;
@@ -109,6 +118,10 @@ namespace ClassicUO.Game.UI.Controls
             return true; 
         }
 
+        protected void ItemSelectedHandler(object sender, int selected)
+        {
+            SelectedIndex = selected;
+        }
 
         protected override void OnMouseUp(int x, int y, MouseButtonType button)
         {
@@ -117,86 +130,19 @@ namespace ClassicUO.Game.UI.Controls
 
             OnBeforeContextMenu?.Invoke(this, null);
 
-            ComboboxContextMenu contextMenu = new ComboboxContextMenu(this, _items, Width, _maxHeight)
+            _contextMenu = new ComboboxContextMenu(_items, Width, _maxHeight, _font)
             {
                 X = ScreenCoordinateX,
                 Y = ScreenCoordinateY
             };
-            if (contextMenu.Height + ScreenCoordinateY > Client.Game.Window.ClientBounds.Height) contextMenu.Y -= contextMenu.Height + ScreenCoordinateY - Client.Game.Window.ClientBounds.Height;
-            UIManager.Add(contextMenu);
+            _contextMenu.OnItemSelected += ItemSelectedHandler;
+
+            if (_contextMenu.Height + ScreenCoordinateY > Client.Game.Window.ClientBounds.Height)
+            {
+                _contextMenu.Y -= _contextMenu.Height + ScreenCoordinateY - Client.Game.Window.ClientBounds.Height;
+            }
+            UIManager.Add(_contextMenu);
             base.OnMouseUp(x, y, button);
-        }
-
-        private class ComboboxContextMenu : Control
-        {
-            private readonly Combobox _box;
-
-            public ComboboxContextMenu(Combobox box, string[] items, int minWidth, int maxHeight)
-            {
-                _box = box;
-                ResizePic background;
-                Add(background = new ResizePic(0x0BB8));
-                HoveredLabel[] labels = new HoveredLabel[items.Length];
-                int index = 0;
-
-                for (int i = 0; i < items.Length; i++)
-                {
-                    string item = items[i];
-
-                    if (item == null)
-                        item = string.Empty;
-
-                    HoveredLabel label = new HoveredLabel(item, false, 0x0453, 0x0453, 0x0453, font: _box._font)
-                    {
-                        X = 2,
-                        Y = index * 15,
-                        Tag = index,
-                        DrawBackgroundCurrentIndex = true,
-                        IsVisible = item.Length != 0
-                    };
-                    label.MouseUp += Label_MouseUp;
-                    labels[index++] = label;
-                }
-
-                int totalHeight = labels.Max(o => o.Y + o.Height);
-                int maxWidth = Math.Max(minWidth, labels.Max(o => o.X + o.Width));
-
-                if (maxHeight != 0 && totalHeight > maxHeight)
-                {
-                    ScrollArea scrollArea = new ScrollArea(0, 0, maxWidth + 15, maxHeight, true);
-                    foreach (HoveredLabel label in labels)
-                    {
-                        label.Y = 0;
-                        label.Width = maxWidth;
-                        scrollArea.Add(label);
-                    }
-
-                    Add(scrollArea);
-                    background.Height = maxHeight;
-                }
-                else
-                {
-                    foreach (HoveredLabel label in labels)
-                    {
-                        label.Width = maxWidth;
-                        Add(label);
-                    }
-
-                    background.Height = totalHeight;
-                }
-
-                background.Width = maxWidth;
-                Height = background.Height;
-                ControlInfo.IsModal = true;
-                ControlInfo.Layer = UILayer.Over;
-                ControlInfo.ModalClickOutsideAreaClosesThisControl = true;
-            }
-
-            private void Label_MouseUp(object sender, MouseEventArgs e)
-            {
-                if (e.Button == MouseButtonType.Left)
-                    _box.SelectedIndex = (int) ((Label) sender).Tag;
-            }
         }
     }
 }

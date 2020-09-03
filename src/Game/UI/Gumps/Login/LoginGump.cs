@@ -33,6 +33,7 @@ using ClassicUO.Utility;
 using ClassicUO.Input;
 using Microsoft.Xna.Framework;
 using SDL2;
+using System.Linq;
 
 namespace ClassicUO.Game.UI.Gumps.Login
 {
@@ -43,7 +44,7 @@ namespace ClassicUO.Game.UI.Gumps.Login
         private readonly Checkbox _checkboxAutologin;
         private readonly Checkbox _checkboxSaveAccount;
         private readonly Button _nextArrow0;
-        private readonly StbTextBox _textboxAccount;
+        private readonly StbTextBoxCombo _textboxAccount;
         private readonly PasswordStbTextBox _passwordFake;
 
         private float _time;
@@ -227,13 +228,16 @@ namespace ClassicUO.Game.UI.Gumps.Login
             offsetX += 7;
 
             // Text Inputs
-            Add(_textboxAccount = new StbTextBox(5, 16, 190, false, hue: 0x034F)
+            var savedAccounts = AccountManager.GetAccounts(Settings.GlobalSettings.IP);
+            Add(_textboxAccount = new StbTextBoxCombo(savedAccounts.Select(account => account.UserName).ToArray(), 5, 16, 190, false, hue: 0x034F, maxComboHeight : 100)
             {
                 X = offsetX,
                 Y = offsetY,
                 Width = 190,
                 Height = 25,
             });
+
+            _textboxAccount.OnOptionSelected += AccountSelectionChangeHandler;
 
             _textboxAccount.SetText(Settings.GlobalSettings.Username);
 
@@ -314,6 +318,12 @@ namespace ClassicUO.Game.UI.Gumps.Login
                 _textboxAccount.SetKeyboardFocus();
         }
 
+        private void AccountSelectionChangeHandler(object sender, int index)
+        {
+            var savedPassword = AccountManager.GetAccountPassword(Settings.GlobalSettings.IP, _textboxAccount.Text);
+            _passwordFake.RealText = string.IsNullOrWhiteSpace(savedPassword) ? string.Empty : Crypter.Decrypt(savedPassword);
+        }
+
         public override void OnKeyboardReturn(int textID, string text)
         {
             SaveCheckboxStatus();
@@ -375,6 +385,12 @@ namespace ClassicUO.Game.UI.Gumps.Login
 
                     break;
             }
+        }
+
+        public override void Dispose()
+        {
+            _textboxAccount.OnOptionSelected -= AccountSelectionChangeHandler;
+            base.Dispose();
         }
 
         private class PasswordStbTextBox : StbTextBox
